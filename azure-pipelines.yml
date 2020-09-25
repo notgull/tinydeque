@@ -6,12 +6,13 @@ jobs:
  - job:
    displayName: "Build & Test"
    strategy:
-     Stable:
-       toolchain: stable
-     Beta:
-       toolchain: beta
-     Nightly:
-       toolchain: nightly
+     matrix:
+       Stable:
+         toolchain: stable
+       Beta:
+         toolchain: beta
+       Nightly:
+         toolchain: nightly
    pool:
      vmImage: ubuntu-latest
    steps:
