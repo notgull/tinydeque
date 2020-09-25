@@ -5,6 +5,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::redundant_pattern_matching)]
 #![allow(clippy::cast_possible_wrap)]
+#![forbid(unsafe_code)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
