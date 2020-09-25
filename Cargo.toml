@@ -2,7 +2,11 @@
 name = "tinydeque"
 version = "0.1.0"
 authors = ["not_a_seagull <jtnunley01@gmail.com>"]
+description = "Array-based deque structures"
 edition = "2018"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/not-a-seagull/tinydeque"
+homepage = "https://github.com/not-a-seagull/tinydeque#readme"
 
 [dependencies]
 tinyvec = "1.0.1"
