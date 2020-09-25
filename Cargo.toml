@@ -6,3 +6,7 @@ edition = "2018"
 
 [dependencies]
 tinyvec = "1.0.1"
+
+[features]
+default = []
+alloc = []

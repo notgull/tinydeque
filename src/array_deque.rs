@@ -1,8 +1,5 @@
 // MIT/Apache2 License
 
-#![allow(clippy::redundant_pattern_matching)]
-#![warn(clippy::pedantic)]
-
 use core::{
     iter::{FromIterator, FusedIterator},
     mem,
@@ -41,10 +38,12 @@ use tinyvec::Array;
 /// // fuck this, I'm out of here
 /// assert_eq!(dmv_line.pop_back(), Some("Larson"));
 /// ```
+#[derive(Debug)]
 pub struct ArrayDeque<A: Array> {
     ring_buffer: A,
     head: usize,
     tail: usize,
+    len: usize,
 }
 
 impl<A: Array> Default for ArrayDeque<A> {
@@ -54,8 +53,35 @@ impl<A: Array> Default for ArrayDeque<A> {
     }
 }
 
+#[inline]
+fn wrap_index(index: isize, size: isize) -> usize {
+    let base = index % size;
+    if base < 0 {
+        (size + base) as usize
+    } else {
+        base as usize
+    }
+}
+
+#[inline]
+fn wrap_add(index: usize, add: usize, size: usize) -> usize {
+    wrap_index((index as isize).wrapping_add(add as isize), size as isize)
+}
+
+#[inline]
+fn wrap_sub(index: usize, sub: usize, size: usize) -> usize {
+    wrap_index((index as isize).wrapping_sub(sub as isize), size as isize)
+}
+
 impl<A: Array> ArrayDeque<A> {
     /// Create a new `ArrayDeque`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use tinydeque::ArrayDeque;
+    /// let foobar: ArrayDeque<[i32; 5]> = ArrayDeque::new();
+    /// ```
     #[inline]
     #[must_use]
     pub fn new() -> Self {
@@ -63,56 +89,86 @@ impl<A: Array> ArrayDeque<A> {
             ring_buffer: A::default(),
             head: 0,
             tail: 0,
+            len: 0,
         }
     }
 
-    /// The capacity of this `ArrayDeque`.
+    /// The capacity of this `ArrayDeque`. This is the maximum number of elements that can be
+    /// stored in this `ArrayDeque`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use tinydeque::ArrayDeque;
+    /// assert_eq!(ArrayDeque::<[&'static str; 8]>::capacity(), 8);
+    /// ```
     #[inline]
     #[must_use]
     pub fn capacity() -> usize {
         A::CAPACITY
     }
 
-    /// Helper function to get the wrapped index.
-    #[inline]
-    fn wrap_index(index: usize, size: usize) -> usize {
-        index % size
-    }
-
-    /// Helper function to do a wrapping add of an index.
-    #[inline]
-    fn wrap_add(&self, index: usize, add: usize) -> usize {
-        Self::wrap_index(index.wrapping_add(add), Self::capacity())
-    }
-
-    /// Helper function to do a wrapping sub of an index.
-    #[inline]
-    fn wrap_sub(&self, index: usize, sub: usize) -> usize {
-        Self::wrap_index(index.wrapping_sub(sub), Self::capacity())
-    }
-
     /// Helper function to get len.
     #[inline]
     fn count(tail: usize, head: usize, size: usize) -> usize {
-        (head.wrapping_sub(tail)) % size
+        wrap_sub(head, tail, size)
     }
 
     /// Get the length of this `ArrayDeque`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinydeque::ArrayDeque;
+    ///
+    /// // we've been hired by the Crab Patrol to find and destroy some crabs
+    /// // they said we shouldn't use Rust to do this but let's do it anyways
+    ///
+    /// /// Representative of a single crab.
+    /// #[derive(Default)]
+    /// struct Crab {
+    ///     diameter: u16,
+    ///     danger_level: u16,
+    /// }
+    ///
+    /// let mut crab_hitlist: ArrayDeque<[Crab; 10]> = ArrayDeque::new();
+    /// for i in 1..=10 {
+    ///     crab_hitlist.push_back(Crab { diameter: i, danger_level: 100 / i }); // small crabs are more dangerous
+    /// }
+    ///
+    /// assert_eq!(crab_hitlist.len(), 10);
+    /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        Self::count(self.tail, self.head, Self::capacity())
+        self.len 
     }
 
     /// Tell whether this `ArrayDeque` is empty.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use tinydeque::ArrayDeque;
+    /// let empty_deque: ArrayDeque<[(); 12]> = ArrayDeque::new();
+    /// assert!(empty_deque.is_empty());
+    /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.tail == self.head
+        self.len == 0
     }
 
-    /// Tell whether this `ArrayDeque` is full.
+    /// Tell whether this `ArrayDeque` is full, or its entire capacity is filled with elements.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use tinydeque::ArrayDeque;
+    /// let full_deque: ArrayDeque<[i64; 12]> = (0i64..12).into_iter().collect();
+    /// assert!(full_deque.is_full());
+    /// ```
     #[inline]
     pub fn is_full(&self) -> bool {
-        self.len() == Self::capacity()
+        self.len == Self::capacity()
     }
 
     /// Push an element onto the back of this `ArrayDeque`.
@@ -120,6 +176,31 @@ impl<A: Array> ArrayDeque<A> {
     /// # Errors
     ///
     /// If this `ArrayDeque` is full, this function returns an Err with the rejected element.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinydeque::ArrayDeque;
+    ///
+    /// // we've been hired by the United Artists of America to manage their art gallery
+    /// // because they're starving artists, they don't have the money to afford good hardware
+    /// // thus we can only store 5 paintings at a time
+    ///
+    /// /// Represents a painting.
+    /// #[derive(Default)]
+    /// struct Painting {
+    ///     name: &'static str,
+    ///     rating: u8,
+    /// }
+    ///
+    /// let mut painting_list: ArrayDeque<[Painting; 10]> = ArrayDeque::new();
+    /// let mut i = 0;
+    ///
+    /// // we have a lot of paintings named "The Jaguar" of questionable quality
+    /// while let Ok(()) = painting_list.try_push_back(Painting { name: "The Jaguar", rating: 3 }) { i += 1; }
+    ///
+    /// assert_eq!(i, 10);
+    /// ```
     #[inline]
     pub fn try_push_back(&mut self, element: A::Item) -> Result<(), A::Item> {
         // if we're full, error out
@@ -129,8 +210,9 @@ impl<A: Array> ArrayDeque<A> {
 
         // increment the head by one
         let head = self.head;
-        self.head = self.wrap_add(self.head, 1);
+        self.head = wrap_add(self.head, 1, Self::capacity());
         self.ring_buffer.as_slice_mut()[head] = element;
+        self.len += 1;
         Ok(())
     }
 
@@ -158,8 +240,9 @@ impl<A: Array> ArrayDeque<A> {
             return Err(element);
         }
 
-        self.tail = self.wrap_sub(self.tail, 1);
+        self.tail = wrap_sub(self.tail, 1, Self::capacity());
         self.ring_buffer.as_slice_mut()[self.tail] = element;
+        self.len += 1;
         Ok(())
     }
 
@@ -181,7 +264,8 @@ impl<A: Array> ArrayDeque<A> {
         if self.is_empty() {
             None
         } else {
-            self.head = self.wrap_sub(self.head, 1);
+            self.head = wrap_sub(self.head, 1, Self::capacity());
+            self.len -= 1;
             Some(mem::take(&mut self.ring_buffer.as_slice_mut()[self.head]))
         }
     }
@@ -193,18 +277,35 @@ impl<A: Array> ArrayDeque<A> {
             None
         } else {
             let tail = self.tail;
-            self.tail = self.wrap_add(self.tail, 1);
+            self.tail = wrap_add(self.tail, 1, Self::capacity());
+            self.len -= 1;
             Some(mem::take(&mut self.ring_buffer.as_slice_mut()[tail]))
         }
     }
 
     /// Get an element at the given index.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tinydeque::ArrayDeque;
+    ///
+    /// let mut my_favorite_numbers = ArrayDeque::<[i32; 6]>::new();
+    /// my_favorite_numbers.push_back(5);
+    /// my_favorite_numbers.push_back(50);
+    /// my_favorite_numbers.push_back(33);
+    /// my_favorite_numbers.push_front(48);
+    ///
+    /// assert_eq!(my_favorite_numbers.get(0), Some(&48));
+    /// assert_eq!(my_favorite_numbers.get(2), Some(&50));
+    /// assert_eq!(my_favorite_numbers.get(4), None);
+    /// ```
     #[inline]
     pub fn get(&self, index: usize) -> Option<&A::Item> {
         if index < self.len() {
             self.ring_buffer
                 .as_slice()
-                .get(self.wrap_add(self.tail, index))
+                .get(wrap_add(self.tail, index, Self::capacity()))
         } else {
             None
         }
@@ -214,7 +315,7 @@ impl<A: Array> ArrayDeque<A> {
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut A::Item> {
         if index < self.len() {
-            let i = self.wrap_add(self.tail, index);
+            let i = wrap_add(self.tail, index, Self::capacity());
             self.ring_buffer.as_slice_mut().get_mut(i)
         } else {
             None
@@ -261,7 +362,7 @@ impl<A: Array> ArrayDeque<A> {
             mem::take(b);
         });
 
-        self.head = self.wrap_sub(self.head, num_dropped);
+        self.head = wrap_sub(self.head, num_dropped, Self::capacity());
     }
 
     /// Clear this `ArrayDeque` of all elements.
@@ -279,6 +380,44 @@ impl<A: Array> ArrayDeque<A> {
             head: self.tail,
         }
     }
+
+    /// Append another `ArrayDeque` onto the back of one.
+    ///
+    /// # Errors
+    ///
+    /// If the `ArrayDeque`'s contents cannot fit into this one, the Err value is returned.
+    #[inline]
+    pub fn append(&mut self, other: &mut Self) -> Result<(), ()> {
+        if self.len() + other.len() > Self::capacity() {
+            Err(())
+        } else {
+            while let Some(item) = other.pop_front() { self.push_back(item); }
+            Ok(())
+        }
+    }
+
+    /// Get the back item of this `ArrayDeque`.
+    #[inline]
+    pub fn back(&self) -> Option<&A::Item> { self.get(self.len - 1) }
+
+    /// Get a mutable reference to the back item of this `ArrayDeque`.
+    #[inline]
+    pub fn back_mut(&mut self) -> Option<&mut A::Item> { self.get_mut(self.len - 1) }
+
+    /// Get the front item of this `ArrayDeque`.
+    #[inline]
+    pub fn front(&self) -> Option<&A::Item> { self.get(0) }
+
+    /// Get a mutable reference to the front item of this `ArrayDeque`.
+    #[inline]
+    pub fn front_mut(&mut self) -> Option<&mut A::Item> { self.get_mut(0) }
+
+    /// Tell whether or not this deque contains an element.
+    #[inline]
+    pub fn contains(&self, item: &A::Item) -> bool where A::Item: PartialEq {
+        let (front, back) = self.as_slices();
+        front.contains(item) || back.contains(item)
+    } 
 }
 
 impl<A: Array> Clone for ArrayDeque<A>
@@ -330,8 +469,7 @@ impl<'a, A: Array> Iterator for Iter<'a, A> {
             None
         } else {
             let tail = self.tail;
-            self.tail =
-                ArrayDeque::<A>::wrap_index(self.tail.wrapping_add(1), self.ring_buffer.len());
+            self.tail = wrap_add(self.tail, 1, self.ring_buffer.len());
             Some(&self.ring_buffer[tail])
         }
     }
@@ -349,8 +487,7 @@ impl<'a, A: Array> DoubleEndedIterator for Iter<'a, A> {
         if self.tail == self.head {
             None
         } else {
-            self.head =
-                ArrayDeque::<A>::wrap_index(self.head.wrapping_sub(1), self.ring_buffer.len());
+            self.head = wrap_sub(self.head, 1, self.ring_buffer.len());
             Some(&self.ring_buffer[self.head])
         }
     }
@@ -448,4 +585,16 @@ impl<T> RingSlices for &mut [T] {
     fn split_at(self, i: usize) -> (Self, Self) {
         (*self).split_at_mut(i)
     }
+}
+
+#[test]
+fn test_index_wrap() {
+    assert_eq!(wrap_index(1, 10), 1);
+    assert_eq!(wrap_index(13, 10), 3);
+    assert_eq!(wrap_index(10, 10), 0);
+
+    assert_eq!(wrap_add(9, 2, 10), 1);
+    assert_eq!(wrap_add(5, 2, 10), 7);
+
+    assert_eq!(wrap_sub(1, 6, 10), 5, "subtraction test");
 }
