@@ -140,7 +140,7 @@ impl<A: Array> ArrayDeque<A> {
     /// ```
     #[inline]
     pub fn len(&self) -> usize {
-        self.len 
+        self.len
     }
 
     /// Tell whether this `ArrayDeque` is empty.
@@ -373,12 +373,16 @@ impl<A: Array> ArrayDeque<A> {
 
     /// Create a new iterator.
     #[inline]
-    pub fn iter(&self) -> Iter<'_, A> {
-        Iter {
-            ring_buffer: self.ring_buffer.as_slice(),
-            tail: self.tail,
-            head: self.tail,
-        }
+    pub fn iter(&self) -> impl Iterator<Item = &A::Item> {
+        let (front, back) = self.as_slices();
+        front.iter().chain(back.iter())
+    }
+
+    /// Create an new mutable iterator.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A::Item> {
+        let (front, back) = self.as_mut_slices();
+        front.iter_mut().chain(back.iter_mut())
     }
 
     /// Append another `ArrayDeque` onto the back of one.
@@ -391,33 +395,46 @@ impl<A: Array> ArrayDeque<A> {
         if self.len() + other.len() > Self::capacity() {
             Err(())
         } else {
-            while let Some(item) = other.pop_front() { self.push_back(item); }
+            while let Some(item) = other.pop_front() {
+                self.push_back(item);
+            }
             Ok(())
         }
     }
 
     /// Get the back item of this `ArrayDeque`.
     #[inline]
-    pub fn back(&self) -> Option<&A::Item> { self.get(self.len - 1) }
+    pub fn back(&self) -> Option<&A::Item> {
+        self.get(self.len - 1)
+    }
 
     /// Get a mutable reference to the back item of this `ArrayDeque`.
     #[inline]
-    pub fn back_mut(&mut self) -> Option<&mut A::Item> { self.get_mut(self.len - 1) }
+    pub fn back_mut(&mut self) -> Option<&mut A::Item> {
+        self.get_mut(self.len - 1)
+    }
 
     /// Get the front item of this `ArrayDeque`.
     #[inline]
-    pub fn front(&self) -> Option<&A::Item> { self.get(0) }
+    pub fn front(&self) -> Option<&A::Item> {
+        self.get(0)
+    }
 
     /// Get a mutable reference to the front item of this `ArrayDeque`.
     #[inline]
-    pub fn front_mut(&mut self) -> Option<&mut A::Item> { self.get_mut(0) }
+    pub fn front_mut(&mut self) -> Option<&mut A::Item> {
+        self.get_mut(0)
+    }
 
     /// Tell whether or not this deque contains an element.
     #[inline]
-    pub fn contains(&self, item: &A::Item) -> bool where A::Item: PartialEq {
+    pub fn contains(&self, item: &A::Item) -> bool
+    where
+        A::Item: PartialEq,
+    {
         let (front, back) = self.as_slices();
         front.contains(item) || back.contains(item)
-    } 
+    }
 }
 
 impl<A: Array> Clone for ArrayDeque<A>

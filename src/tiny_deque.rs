@@ -148,11 +148,16 @@ impl<A: Array> TinyDeque<A> {
 
     /// Create an iterator.
     #[inline]
-    pub fn iter(&self) -> Iter<'_, A> {
-        match self {
-            Self::Heap(v) => Iter::Heap(v.iter()),
-            Self::Stack(s) => Iter::Stack(s.iter()),
-        }
+    pub fn iter(&self) -> impl Iterator<Item = &A::Item> {
+        let (front, back) = self.as_slices();
+        front.iter().chain(back.iter())
+    }
+
+    /// Create a mutable iterator.
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A::Item> {
+        let (front, back) = self.as_mut_slices();
+        front.iter().chain(back.iter())
     }
 
     #[inline]
@@ -204,43 +209,5 @@ impl<A: Array> Extend<A::Item> for TinyDeque<A> {
     #[inline]
     fn extend<T: IntoIterator<Item = A::Item>>(&mut self, iter: T) {
         iter.into_iter().for_each(|item| self.push_back(item));
-    }
-}
-
-/// An iterator over the elements in a `TinyDeque`.
-pub enum Iter<'a, A: Array> {
-    Stack(ArrayDequeIter<'a, A>),
-    Heap(VecDequeIter<'a, A::Item>),
-}
-
-impl<'a, A: Array> Iterator for Iter<'a, A> {
-    type Item = &'a A::Item;
-
-    #[inline]
-    fn next(&mut self) -> Option<&'a A::Item> {
-        match self {
-            Self::Stack(a) => a.next(),
-            Self::Heap(v) => v.next(),
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            Self::Stack(a) => a.size_hint(),
-            Self::Heap(v) => v.size_hint(),
-        }
-    }
-}
-
-impl<'a, A: Array> ExactSizeIterator for Iter<'a, A> {}
-
-impl<'a, A: Array> DoubleEndedIterator for Iter<'a, A> {
-    #[inline]
-    fn next_back(&mut self) -> Option<&'a A::Item> {
-        match self {
-            Self::Stack(a) => a.next_back(),
-            Self::Heap(v) => v.next_back(),
-        }
     }
 }
