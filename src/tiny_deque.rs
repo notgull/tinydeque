@@ -2,8 +2,8 @@
 
 #![cfg(feature = "alloc")]
 
-use super::array_deque::{ArrayDeque, Iter as ArrayDequeIter};
-use alloc::collections::vec_deque::{Iter as VecDequeIter, VecDeque};
+use super::array_deque::ArrayDeque;
+use alloc::collections::vec_deque::VecDeque;
 use core::iter::FromIterator;
 use tinyvec::Array;
 
@@ -157,7 +157,7 @@ impl<A: Array> TinyDeque<A> {
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut A::Item> {
         let (front, back) = self.as_mut_slices();
-        front.iter().chain(back.iter())
+        front.iter_mut().chain(back.iter_mut())
     }
 
     #[inline]
